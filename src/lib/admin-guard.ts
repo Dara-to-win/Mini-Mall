@@ -4,7 +4,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
-/** 校验当前用户是否为管理员，不是则返回 403 响应 */
+/**
+ * 校验当前用户是否为管理员
+ * ⚠️ 调用方必须检查返回值：`if (guard.error) return guard.error;`
+ * 漏写此检查会导致路由无保护（TypeScript 不会报错）
+ */
 export async function requireAdmin() {
   const session = await getSession();
   if (!session) {

@@ -28,7 +28,7 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: "bg-gray-100 text-gray-500",
 };
 
-/** 每个状态允许的下一步操作 */
+/** 每个状态允许的下一步操作（需与 api/admin/orders/[id]/route.ts VALID_TRANSITIONS 保持同步） */
 const NEXT_ACTIONS: Record<string, { label: string; status: string; className: string }[]> = {
   pending: [
     { label: "设为已支付", status: "paid", className: "bg-blue-600 hover:bg-blue-700" },
@@ -49,6 +49,7 @@ const NEXT_ACTIONS: Record<string, { label: string; status: string; className: s
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState("");
 
   async function loadOrders() {
     const res = await fetch("/api/admin/orders");
@@ -60,12 +61,18 @@ export default function AdminOrdersPage() {
   useEffect(() => { loadOrders(); }, []);
 
   async function updateStatus(orderId: number, status: string) {
-    await fetch(`/api/admin/orders/${orderId}`, {
+    setActionError("");
+    const res = await fetch(`/api/admin/orders/${orderId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    loadOrders();
+    if (res.ok) {
+      loadOrders();
+    } else {
+      const data = await res.json();
+      setActionError(data.error || "操作失败");
+    }
   }
 
   if (loading) return <div className="text-center py-16 text-gray-400">加载中...</div>;
@@ -73,6 +80,14 @@ export default function AdminOrdersPage() {
   return (
     <div>
       <h1 className="text-xl font-bold mb-4">订单管理</h1>
+
+      {actionError && (
+        <div className="bg-red-50 text-red-600 text-sm px-3 py-2 rounded mb-3">
+          {actionError}
+          <button onClick={() => setActionError("")} className="ml-2 underline">关闭</button>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500">

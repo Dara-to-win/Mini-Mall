@@ -40,14 +40,18 @@ export default function AdminProductsPage() {
   const [categoryId, setCategoryId] = useState("");
 
   async function loadData() {
-    const [pRes, cRes] = await Promise.all([
-      fetch("/api/admin/products"),
-      fetch("/api/categories"),
-    ]);
-    const pData = await pRes.json();
-    const cData = await cRes.json();
-    if (Array.isArray(pData)) setProducts(pData);
-    if (Array.isArray(cData)) setCategories(cData);
+    try {
+      const [pRes, cRes] = await Promise.all([
+        fetch("/api/admin/products"),
+        fetch("/api/categories"),
+      ]);
+      const pData = await pRes.json();
+      const cData = await cRes.json();
+      if (pRes.ok && Array.isArray(pData)) setProducts(pData);
+      if (cRes.ok && Array.isArray(cData)) setCategories(cData);
+    } catch {
+      // 静默失败，保留旧数据
+    }
     setLoading(false);
   }
 
@@ -69,8 +73,20 @@ export default function AdminProductsPage() {
 
   async function handleSave() {
     setSaving(true); setError("");
+
+    // 客户端校验
+    if (!name.trim()) { setError("请输入商品名称"); setSaving(false); return; }
+    if (!description.trim()) { setError("请输入商品描述"); setSaving(false); return; }
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+      setError("请输入有效的价格"); setSaving(false); return;
+    }
+    if (!categoryId) { setError("请选择分类"); setSaving(false); return; }
+    const parsedStock = parseInt(stock, 10);
+    if (isNaN(parsedStock) || parsedStock < 0) { setError("请输入有效的库存数量"); setSaving(false); return; }
+
     const body = {
-      name, description, price, image: image || null, stock: parseInt(stock), categoryId: parseInt(categoryId),
+      name: name.trim(), description: description.trim(), price,
+      image: image || null, stock: parsedStock, categoryId: parseInt(categoryId, 10),
     };
 
     const url = editingId ? `/api/admin/products/${editingId}` : "/api/admin/products";

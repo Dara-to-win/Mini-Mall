@@ -20,21 +20,28 @@ export async function DELETE(
   }
 
   try {
-    // 检查是否有商品关联
-    const productCount = await prisma.product.count({
-      where: { categoryId },
+    // 事务内先检查再删除，防止竞态
+    await prisma.$transaction(async (tx) => {
+      const productCount = await tx.product.count({
+        where: { categoryId },
+      });
+
+      if (productCount > 0) {
+        throw new Error(`HAS_PRODUCTS:${productCount}`);
+      }
+
+      await tx.category.delete({ where: { id: categoryId } });
     });
 
-    if (productCount > 0) {
+    return NextResponse.json({ message: "已删除" });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("HAS_PRODUCTS:")) {
+      const count = error.message.split(":")[1];
       return NextResponse.json(
-        { error: `该分类下有 ${productCount} 件商品，请先移动或删除商品` },
+        { error: `该分类下有 ${count} 件商品，请先移动或删除商品` },
         { status: 400 }
       );
     }
-
-    await prisma.category.delete({ where: { id: categoryId } });
-    return NextResponse.json({ message: "已删除" });
-  } catch (error) {
     console.error("删除分类失败:", error);
     return NextResponse.json({ error: "删除分类失败" }, { status: 500 });
   }
