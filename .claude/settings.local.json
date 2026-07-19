@@ -20,5 +20,18 @@
       "Bash(rm -rf *)"
     ]
   },
-  "autoCompactThreshold": 80
+  "hooks": {
+   "PostToolUse": [
+     {
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+         "type": "command",
+         "command": "echo \"文件已修改，建议检查一下改了什么\""
+        }
+      ]
+     }
+   ]
+  },
+  "autoCompactWindow": 800000
 }

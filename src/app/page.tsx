@@ -1,65 +1,92 @@
-import Image from "next/image";
+/**
+ * 首页 — 商品网格 + 搜索框 + 分类标签切换 + 分页
+ * 使用 Server Component 直接查询数据库
+ */
+import { Suspense } from "react";
+import { prisma } from "@/lib/prisma";
+import { parsePage, buildProductWhereClause, PAGE_SIZE } from "@/lib/utils";
+import ProductCard from "@/components/ProductCard";
+import SearchBar from "@/components/SearchBar";
+import CategoryTabs from "@/components/CategoryTabs";
+import Pagination from "@/components/Pagination";
 
-export default function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string; category?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+  const search = params.search || "";
+  const categorySlug = params.category || "";
+  const page = parsePage(params.page);
+
+  // 构建查询条件
+  const where = buildProductWhereClause(search, categorySlug);
+
+  // 并行查询：分类列表 + 商品总数 + 当前页商品
+  const [categories, total, products] = await Promise.all([
+    prisma.category.findMany({
+      include: { _count: { select: { products: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      include: { category: true },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* 搜索框 */}
+      <Suspense fallback={<div className="h-12 bg-gray-100 rounded-lg animate-pulse" />}>
+        <SearchBar defaultValue={search} />
+      </Suspense>
+
+      {/* 分类标签 */}
+      <Suspense fallback={<div className="flex gap-2 mt-4"><div className="h-8 w-16 bg-gray-100 rounded-full" /></div>}>
+        <CategoryTabs
+          categories={categories}
+          activeSlug={categorySlug}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </Suspense>
+
+      {/* 商品网格 */}
+      {products.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+          {products.map((product) => (
+            <ProductCard
+              key={product.id}
+              id={product.id}
+              name={product.name}
+              price={product.price}
+              image={product.image}
+              stock={product.stock}
+              categoryName={product.category.name}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ))}
         </div>
-      </main>
+      ) : (
+        <div className="text-center py-20 text-gray-400">
+          <p className="text-lg">暂无商品</p>
+          <p className="text-sm mt-2">换个搜索关键词或分类试试</p>
+        </div>
+      )}
+
+      {/* 分页 */}
+      {totalPages > 1 && (
+        <Suspense fallback={<div className="h-10 bg-gray-100 rounded mt-8 animate-pulse" />}>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
