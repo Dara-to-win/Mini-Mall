@@ -102,30 +102,43 @@ export async function PUT(
       );
     }
 
-    // 取消订单时恢复库存
+    // 取消订单时恢复库存（事务内加乐观锁防并发）
     if (status === "cancelled") {
       const orderItems = await prisma.orderItem.findMany({
         where: { orderId: order.id },
       });
 
       await prisma.$transaction(async (tx) => {
+        // 乐观锁：仅当订单仍处于当前状态时才允许取消
+        const updated = await tx.order.updateMany({
+          where: { id: order.id, status: order.status },
+          data: { status },
+        });
+
+        if (updated.count === 0) {
+          throw new Error("ORDER_STATUS_CHANGED");
+        }
+
         for (const item of orderItems) {
           await tx.product.update({
             where: { id: item.productId },
             data: { stock: { increment: item.quantity } },
           });
         }
-        await tx.order.update({
-          where: { id: order.id },
-          data: { status },
-        });
       });
     } else {
-      // 其他状态直接更新
-      await prisma.order.update({
-        where: { id: order.id },
+      // 其他状态更新也用乐观锁
+      const updated = await prisma.order.updateMany({
+        where: { id: order.id, status: order.status },
         data: { status },
       });
+
+      if (updated.count === 0) {
+        return NextResponse.json(
+          { error: "订单状态已变更，请刷新后重试" },
+          { status: 409 }
+        );
+      }
     }
 
     return NextResponse.json({ message: "状态更新成功", status });

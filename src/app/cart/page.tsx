@@ -24,6 +24,7 @@ export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatingIds, setUpdatingIds] = useState<Set<number>>(new Set());
 
   /** 加载购物车数据 */
   const loadCart = useCallback(async () => {
@@ -50,34 +51,52 @@ export default function CartPage() {
     loadCart();
   }, [loadCart]);
 
-  /** 修改数量 */
+  /** 修改数量 — 操作期间禁用按钮防止竞态 */
   async function updateQuantity(cartItemId: number, quantity: number) {
-    const res = await fetch(`/api/cart/${cartItemId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quantity }),
-    });
+    setUpdatingIds((prev) => new Set(prev).add(cartItemId));
+    try {
+      const res = await fetch(`/api/cart/${cartItemId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity }),
+      });
 
-    if (res.ok) {
-      loadCart();
-    } else {
-      const data = await res.json();
-      setError(data.error || "操作失败");
-      loadCart(); // 刷新以恢复正确状态
+      if (res.ok) {
+        loadCart();
+      } else {
+        const data = await res.json();
+        setError(data.error || "操作失败");
+        loadCart();
+      }
+    } finally {
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cartItemId);
+        return next;
+      });
     }
   }
 
   /** 删除项 */
   async function removeItem(cartItemId: number) {
-    const res = await fetch(`/api/cart/${cartItemId}`, {
-      method: "DELETE",
-    });
+    setUpdatingIds((prev) => new Set(prev).add(cartItemId));
+    try {
+      const res = await fetch(`/api/cart/${cartItemId}`, {
+        method: "DELETE",
+      });
 
-    if (res.ok) {
-      loadCart();
-    } else {
-      const data = await res.json();
-      setError(data.error || "删除失败");
+      if (res.ok) {
+        loadCart();
+      } else {
+        const data = await res.json();
+        setError(data.error || "删除失败");
+      }
+    } finally {
+      setUpdatingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cartItemId);
+        return next;
+      });
     }
   }
 
@@ -127,72 +146,76 @@ export default function CartPage() {
 
           {/* 购物车列表 */}
           <div className="space-y-3">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="grid grid-cols-[auto_1fr] sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center bg-white p-3 rounded-lg border"
-              >
-                {/* 商品信息 */}
-                <Link
-                  href={`/products/${item.productId}`}
-                  className="flex items-center gap-3 min-w-0"
+            {items.map((item) => {
+              const busy = updatingIds.has(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-[auto_1fr] sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 items-center bg-white p-3 rounded-lg border"
                 >
-                  <div className="w-16 h-16 rounded bg-gray-100 shrink-0 overflow-hidden">
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                        无图
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-sm text-gray-900 line-clamp-2">
-                    {item.name}
+                  {/* 商品信息 */}
+                  <Link
+                    href={`/products/${item.productId}`}
+                    className="flex items-center gap-3 min-w-0"
+                  >
+                    <div className="w-16 h-16 rounded bg-gray-100 shrink-0 overflow-hidden">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                          无图
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-900 line-clamp-2">
+                      {item.name}
+                    </span>
+                  </Link>
+
+                  {/* 单价 */}
+                  <span className="text-sm text-gray-900 text-center">
+                    {formatPrice(item.price)}
                   </span>
-                </Link>
 
-                {/* 单价 */}
-                <span className="text-sm text-gray-900 text-center">
-                  {formatPrice(item.price)}
-                </span>
+                  {/* 数量控制 — 操作中禁用 */}
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      disabled={busy || item.quantity <= 1}
+                      className="w-7 h-7 border rounded text-sm flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <span className="w-8 text-center text-sm">{busy ? "…" : item.quantity}</span>
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      disabled={busy || item.quantity >= item.stock}
+                      className="w-7 h-7 border rounded text-sm flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
 
-                {/* 数量控制 */}
-                <div className="flex items-center justify-center gap-1">
+                  {/* 小计 */}
+                  <span className="text-sm font-medium text-red-600 text-right">
+                    {formatPrice(item.subtotal)}
+                  </span>
+
+                  {/* 删除 — 操作中禁用 */}
                   <button
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    disabled={item.quantity <= 1}
-                    className="w-7 h-7 border rounded text-sm flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    onClick={() => removeItem(item.id)}
+                    disabled={busy}
+                    className="text-xs text-gray-400 hover:text-red-600 disabled:opacity-30 justify-self-end sm:justify-self-auto"
                   >
-                    −
-                  </button>
-                  <span className="w-8 text-center text-sm">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    disabled={item.quantity >= item.stock}
-                    className="w-7 h-7 border rounded text-sm flex items-center justify-center hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    +
+                    删除
                   </button>
                 </div>
-
-                {/* 小计 */}
-                <span className="text-sm font-medium text-red-600 text-right">
-                  {formatPrice(item.subtotal)}
-                </span>
-
-                {/* 删除 */}
-                <button
-                  onClick={() => removeItem(item.id)}
-                  className="text-xs text-gray-400 hover:text-red-600 justify-self-end sm:justify-self-auto"
-                >
-                  删除
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* 底部总价和提交 */}

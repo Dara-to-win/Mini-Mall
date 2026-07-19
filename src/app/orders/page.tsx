@@ -35,14 +35,19 @@ const STATUS_COLORS: Record<string, string> = {
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch("/api/orders")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setOrders(data);
+        if (Array.isArray(data)) {
+          setOrders(data);
+        } else if (data.error) {
+          setError(data.error);
+        }
       })
-      .catch(() => {})
+      .catch(() => setError("网络错误，请稍后重试"))
       .finally(() => setLoading(false));
   }, []);
 
@@ -58,7 +63,14 @@ export default function OrdersPage() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-6">我的订单</h1>
 
-      {orders.length === 0 ? (
+      {error && (
+        <div className="bg-red-50 text-red-600 text-sm px-3 py-2 rounded mb-4">
+          {error}
+          <button onClick={() => window.location.reload()} className="ml-2 underline">重试</button>
+        </div>
+      )}
+
+      {!error && orders.length === 0 ? (
         <div className="text-center py-20 text-gray-400">
           <p className="text-lg">暂无订单</p>
           <Link

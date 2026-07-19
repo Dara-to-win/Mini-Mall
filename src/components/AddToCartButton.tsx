@@ -51,10 +51,11 @@ export default function AddToCartButton({
         return;
       }
 
-      // 成功
+      // 成功 — 清理旧定时器后再设新的
       setAdded(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setAdded(false), 2000);
-      router.refresh(); // 刷新 Header 中的购物车（如有）
+      router.refresh();
     } catch {
       setError("网络错误，请稍后重试");
     } finally {
@@ -62,11 +63,14 @@ export default function AddToCartButton({
     }
   }
 
+  // 反馈期内禁止重复点击
+  const isBusy = loading || added;
+
   return (
     <div>
       <button
         onClick={handleAdd}
-        disabled={disabled || loading}
+        disabled={disabled || isBusy}
         className={`w-full py-3 rounded-lg text-sm font-medium transition-colors ${
           disabled
             ? "bg-gray-300 text-gray-500 cursor-not-allowed"

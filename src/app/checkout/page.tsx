@@ -24,6 +24,7 @@ export default function CheckoutPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
   const loadCart = useCallback(async () => {
@@ -52,6 +53,7 @@ export default function CheckoutPage() {
   }, [loadCart]);
 
   async function handleSubmit() {
+    if (submitted) return; // 防止重复提交
     setSubmitting(true);
     setError("");
 
@@ -65,10 +67,12 @@ export default function CheckoutPage() {
         } else {
           setError(data.error || "创建订单失败");
         }
+        setSubmitting(false);
         return;
       }
 
-      // 下单成功，跳转订单详情
+      // 下单成功，锁定按钮后跳转
+      setSubmitted(true);
       router.push(`/orders/${data.id}`);
     } catch {
       setError("网络错误，请稍后重试");
@@ -144,10 +148,10 @@ export default function CheckoutPage() {
           </Link>
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || submitted}
             className="flex-1 py-2.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {submitting ? "提交中..." : "确认下单"}
+            {submitted ? "下单成功" : submitting ? "提交中..." : "确认下单"}
           </button>
         </div>
 
