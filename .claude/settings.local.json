@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(node server.js)",
+      "Bash(npm create *)",
+      "Bash(npm init *)",
+      "Bash(npm run *)",
+      "Read",
+      "Write",
+      "Bash(npm *)",
+      "Bash(git *)",
+      "Bash(node *)",
+      "Bash(curl -s http://localhost:3000/hello)",
+      "Bash(kill %1)",
+      "Bash(timeout 10 streamlit run app.py)",
+      "Bash(npx next *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)"
+    ]
+  },
+  "autoCompactThreshold": 80
+}
