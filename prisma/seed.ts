@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import bcrypt from "bcryptjs";
 
 // LibSQL 适配器连接 SQLite
 const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL! });
@@ -15,6 +16,7 @@ async function main() {
   await prisma.cartItem.deleteMany();
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany();
 
@@ -30,6 +32,28 @@ async function main() {
   ]);
 
   console.log(`已创建 ${categories.length} 个分类`);
+
+  // 创建管理员和测试用户
+  const adminHash = await bcrypt.hash("admin123", 12);
+  const userHash = await bcrypt.hash("user123", 12);
+
+  await prisma.user.create({
+    data: {
+      email: "admin@minimall.com",
+      password: adminHash,
+      name: "管理员",
+      role: "admin",
+    },
+  });
+  await prisma.user.create({
+    data: {
+      email: "user@minimall.com",
+      password: userHash,
+      name: "测试用户",
+      role: "user",
+    },
+  });
+  console.log("已创建管理员和测试用户账号");
 
   // 创建商品
   const products = [
